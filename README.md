@@ -9,6 +9,10 @@ You can adjust the memory used by the scraper and max concurrency in the .env fi
 
 Uses ramdisk to help with IO performance. 
 
+Intened to be used with this n8n build: 
+https://github.com/conor-is-my-name/n8n-autoscaling 
+
+
 ## API Endpoints
 
 ### Start a Crawl
