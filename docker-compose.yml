@@ -1,0 +1,16 @@
+services:
+  scraper:
+    tmpfs:
+     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+    build: .
+    env_file: .env
+    ports:
+      - "3001-3004:3001"
+    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+#    deploy:
+#      replicas: 4
+#      resources:
+#        limits:
+#          cpus: '1'
+#          memory: 2G
+

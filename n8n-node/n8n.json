@@ -1,0 +1,23 @@
+{
+    "nodes": [
+      {
+        "parameters": {
+          "url": "http://100.XX.XX.XX:####/start-crawl?url=https://paulgraham.com&maxResults=10",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          20,
+          -120
+        ],
+        "id": "32b3781c-fdbf-4e95-a869-162f0a8b2ac8",
+        "name": "HTTP Request"
+      }
+    ],
+    "connections": {},
+    "pinData": {},
+    "meta": {
+      "instanceId": "bfc265a0402eb6543e6cbf43d37210f6fa8cb72736676656a159075d75879e79"
+    }
+  }
