@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { PlaywrightCrawler, Configuration } from 'crawlee';
-import { requestHandler, getMetrics, clearMetrics } from './routes.js';
+import { requestHandler, getMetrics, clearMetrics, flushBatch } from './routes.js';
 
 // Set memory limit from environment
 process.env.CRAWLEE_MEMORY_MBYTES = process.env.CRAWLEE_MEMORY_MBYTES || '2048';
@@ -59,6 +59,9 @@ app.get('/start-crawl', async (req, res) => {
         await crawler.run([urlToCrawl]);
         console.log('Crawler finished successfully.');
 
+        // Flush any remaining articles in the batch
+        await flushBatch();
+
         // Get the metrics
         const metrics = getMetrics();
 
@@ -70,6 +73,10 @@ app.get('/start-crawl', async (req, res) => {
         });
     } catch (error) {
         console.error('Crawler failed:', error);
+        
+        // Flush any remaining articles in the batch even on failure
+        await flushBatch();
+        
         res.status(500).json({
             success: false,
             message: 'Crawler failed. Check the server logs for details.',
