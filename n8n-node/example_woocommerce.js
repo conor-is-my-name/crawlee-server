@@ -1,3 +1,7 @@
+// Use this as an example on how to crawl a WooCommerce store only.
+// This code will not work if directly copied into the routes.js file.
+// Reference the selectors used and structure only.
+
 import { createPlaywrightRouter, sleep } from 'crawlee';
 import fs from 'fs';
 import path from 'path';
