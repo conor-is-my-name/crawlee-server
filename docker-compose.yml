@@ -1,12 +1,14 @@
 services:
   scraper1:
     tmpfs:
-     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+     - /tmp:size=1G,mode=1777
     build: .
     env_file: .env
+    environment:
+      PORT: 3001
     ports:
       - "3001:3001"
-    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+    cpu_shares: 1024
     deploy:
       replicas: 1
       resources:
@@ -18,12 +20,14 @@ services:
 
   scraper2:
     tmpfs:
-     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+     - /tmp:size=1G,mode=1777
     build: .
     env_file: .env
+    environment:
+      PORT: 3002
     ports:
       - "3002:3002"
-    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+    cpu_shares: 1024
     deploy:
       replicas: 1
       resources:
@@ -35,12 +39,14 @@ services:
 
   scraper3:
     tmpfs:
-     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+     - /tmp:size=1G,mode=1777
     build: .
     env_file: .env
+    environment:
+      PORT: 3003
     ports:
       - "3003:3003"
-    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+    cpu_shares: 1024
     deploy:
       replicas: 1
       resources:
@@ -52,12 +58,166 @@ services:
 
   scraper4:
     tmpfs:
-     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+     - /tmp:size=1G,mode=1777
     build: .
     env_file: .env
+    environment:
+      PORT: 3004
     ports:
       - "3004:3004"
-    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper5:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3005
+    ports:
+      - "3005:3005"
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper6:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3006
+    ports:
+      - "3006:3006"
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper7:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3007
+    ports:
+      - "3007:3007"
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper8:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3008
+    ports:
+      - "3008:3008"
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper9:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3009
+    ports:
+      - "3009:3009"
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper10:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3010
+    ports:
+      - "3010:3010"
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper11:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3011
+    ports:
+      - "3011:3011"
+    cpu_shares: 1024
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper12:
+    tmpfs:
+     - /tmp:size=1G,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 3012
+    ports:
+      - "3012:3012"
+    cpu_shares: 1024
     deploy:
       replicas: 1
       resources:

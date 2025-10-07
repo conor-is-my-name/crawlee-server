@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 
 // Initialize the Express app
 const app = express();
-const port = 3001; // Always use internal container port
+const port = parseInt(process.env.PORT) || 3001;
 
 // Track active crawls to prevent resource exhaustion
 const activeCrawls = new Set();
