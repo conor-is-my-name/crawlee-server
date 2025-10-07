@@ -1,16 +1,72 @@
 services:
-  scraper:
+  scraper1:
     tmpfs:
      - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
     build: .
     env_file: .env
     ports:
-      - "3001-3004:3001"
+      - "3001:3001"
     cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
-#    deploy:
-#      replicas: 4
-#      resources:
-#        limits:
-#          cpus: '1'
-#          memory: 2G
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
 
+  scraper2:
+    tmpfs:
+     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+    build: .
+    env_file: .env
+    ports:
+      - "3002:3002"
+    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper3:
+    tmpfs:
+     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+    build: .
+    env_file: .env
+    ports:
+      - "3003:3003"
+    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper4:
+    tmpfs:
+     - /tmp:size=1G,mode=1777  # 1GB RAM disk, full permissions
+    build: .
+    env_file: .env
+    ports:
+      - "3004:3004"
+    cpu_shares: 1024 # Add cpu_shares here if not using Swarm mode
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+networks:
+  shark:
+    external: true

@@ -1,70 +1,124 @@
 import { pool } from './db.js'; // Import the pool directly
 import process from 'process';
 
-let totalPagesScraped = 0;
-let totalFailures = 0;
-let startTime = null;
-let sitehomepage = null; // Variable to store the base URL
+// Map to hold per-crawl context data (keyed by crawlId)
+const crawlContexts = new Map();
 
-// Batch configuration
-const BATCH_SIZE = 100; // Number of rows to insert in a single batch
-let batch = []; // Array to hold rows for the current batch
+// Cleanup old crawl contexts after timeout (prevent memory leaks)
+const CONTEXT_TIMEOUT_MS = 3600000; // 1 hour
+const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [crawlId, ctx] of crawlContexts.entries()) {
+        if (now - ctx.startTime > CONTEXT_TIMEOUT_MS) {
+            console.warn(`Cleaning up stale crawl context: ${crawlId}`);
+            crawlContexts.delete(crawlId);
+        }
+    }
+}, 300000); // Check every 5 minutes
+
+// Prevent the interval from keeping the process alive
+cleanupInterval.unref();
 
 // Function to insert a batch of rows within a transaction
 const insertBatch = async (batch) => {
-    const client = await pool.connect(); // Acquire a client from the pool
+    let client = null;
     try {
+        client = await pool.connect(); // Acquire a client from the pool
         await client.query('BEGIN'); // Start a transaction
+
+        // Filter out records without any contact info
+        const contactRecords = batch.filter(record =>
+            (record[2] && record[2].length > 0) || // emails
+            (record[3] && record[3].length > 0) || // twitter_links
+            (record[4] && record[4].length > 0) || // instagram_links
+            (record[5] && record[5].length > 0)    // linkedin_links
+        );
+
+        if (contactRecords.length === 0) {
+            console.log('Skipping empty contact batch');
+            await client.query('COMMIT'); // Commit empty transaction to release lock
+            return;
+        }
 
         const insertQuery = `
             INSERT INTO ${process.env.SCRAPE_TABLE_NAME} (
-                sitehomepage, article_url, title, bodyText, datePublished, 
-                articlecategories, tags, keywords, author, featuredImage, comments
+                site_homepage, loaded_url,
+                emails, twitter_links, instagram_links, linkedin_links
             )
-            VALUES ${batch.map((_, i) => `($${i * 11 + 1}, $${i * 11 + 2}, $${i * 11 + 3}, $${i * 11 + 4}, $${i * 11 + 5}, $${i * 11 + 6}, $${i * 11 + 7}, $${i * 11 + 8}, $${i * 11 + 9}, $${i * 11 + 10}, $${i * 11 + 11})`).join(', ')}
-            ON CONFLICT (article_url) DO UPDATE SET
-                sitehomepage = EXCLUDED.sitehomepage,
-                title = EXCLUDED.title,
-                bodyText = EXCLUDED.bodyText,
-                datePublished = EXCLUDED.datePublished,
-                articlecategories = EXCLUDED.articlecategories,
-                tags = EXCLUDED.tags,
-                keywords = EXCLUDED.keywords,
-                author = EXCLUDED.author,
-                featuredImage = EXCLUDED.featuredImage,
-                comments = EXCLUDED.comments;
+            VALUES ${contactRecords.map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`).join(', ')}
+            ON CONFLICT (site_homepage) DO UPDATE SET
+                loaded_url = EXCLUDED.loaded_url,
+                emails = EXCLUDED.emails,
+                twitter_links = EXCLUDED.twitter_links,
+                instagram_links = EXCLUDED.instagram_links,
+                linkedin_links = EXCLUDED.linkedin_links;
         `;
-        const values = batch.flat(); // Flatten the batch array into a single array of values
+        // Flatten the contactRecords array into a single array of values for the query
+        const values = contactRecords.flat();
 
         await client.query(insertQuery, values); // Execute the batch insert
         await client.query('COMMIT'); // Commit the transaction
 
         console.log(`Processed ${batch.length} rows (inserted or updated)`);
     } catch (error) {
-        await client.query('ROLLBACK'); // Rollback the transaction on error
+        // Only attempt rollback if client exists and connection is active
+        if (client) {
+            try {
+                await client.query('ROLLBACK');
+            } catch (rollbackError) {
+                console.error('Error during rollback:', rollbackError);
+            }
+        }
         console.error('Error inserting/updating batch:', error);
         throw error;
     } finally {
-        client.release(); // Release the client back to the pool
+        // Always release the client back to the pool if it was acquired
+        if (client) {
+            try {
+                client.release();
+            } catch (releaseError) {
+                console.error('Error releasing client:', releaseError);
+            }
+        }
     }
 };
 
-export const requestHandler = async ({ request, page, log, pushData, enqueueLinks, maxResults }) => {
-    if (!startTime) {
-        startTime = Date.now(); // Record the start time of the crawl
+export const requestHandler = async ({ request, page, log, pushData, enqueueLinks, maxResults, crawlId }) => {
+    // Get or create context for this crawl
+    if (!crawlContexts.has(crawlId)) {
+        crawlContexts.set(crawlId, {
+            totalPagesScraped: 0,
+            totalFailures: 0,
+            startTime: Date.now(),
+            site_homepage: null,
+            websiteData: {
+                site_homepage: null,
+                emails: new Set(),
+                twitter_links: new Set(),
+                instagram_links: new Set(),
+                linkedin_links: new Set()
+            }
+        });
     }
 
-    // Set the base URL (sitehomepage) if it's not already set
-    if (!sitehomepage) {
-        sitehomepage = new URL(request.loadedUrl).origin; // Extract the base URL (e.g., https://example.com)
-        log.info(`Base URL set to: ${sitehomepage}`);
-        console.log(`Base URL set to: ${sitehomepage}`);
+    const ctx = crawlContexts.get(crawlId);
+
+    // Get current website
+    const currentWebsite = new URL(request.loadedUrl).origin;
+
+    // Reset metrics if website has changed
+    if (ctx.site_homepage !== currentWebsite) {
+        ctx.site_homepage = currentWebsite;
+        ctx.websiteData.site_homepage = ctx.site_homepage;
+        ctx.totalPagesScraped = 0;
+        log.info(`New website detected: ${ctx.site_homepage}`);
+        console.log(`New website detected: ${ctx.site_homepage}`);
     }
 
     // Check if we've reached max results for this website
-    if (maxResults !== null && totalPagesScraped >= maxResults) {
-        log.info(`Reached max results (${maxResults}) for ${sitehomepage}, skipping ${request.url}`);
-        return;
+    if (maxResults !== null && ctx.totalPagesScraped >= maxResults) {
+        log.info(`Reached max results (${maxResults}) for ${ctx.site_homepage}, aborting crawl`);
+        throw new Error('MAX_RESULTS_REACHED');
     }
 
     log.info(`Processing: ${request.url}`);
@@ -77,21 +131,51 @@ export const requestHandler = async ({ request, page, log, pushData, enqueueLink
         log.info(`Title: ${title}`);
         console.log(`Page Title: ${title}`);
 
-        // Scroll the page
+        // Scroll the page to trigger dynamic content
         await page.evaluate(() => {
             window.scrollBy(0, window.innerHeight);
         });
+
+        // Check if page might have contact info
+        const contactSelectors = [
+            'a[href^="mailto:"]',
+            'a[href*="twitter.com"]',
+            'a[href*="instagram.com"]',
+            'a[href*="linkedin.com"]'
+        ];
+        
+        const hasContactInfo = await page.$$eval(contactSelectors.join(','),
+            elements => elements.length > 0
+        );
 
         // Extract body text
         const bodyText = await page.evaluate(() => {
             const clone = (document.querySelector('article') || document.body).cloneNode(true);
             // Remove unwanted elements
             clone.querySelectorAll('img, figure, script, style, .ad, .caption').forEach(el => el.remove());
+
+            // Extract emails from original HTML - improved regex
+            const emailRegex = /\b[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\b/gi;
+            const emails = Array.from(document.body.textContent.matchAll(emailRegex))
+                .map(m => m[0].toLowerCase())
+                .filter(email => {
+                    // Filter out common false positives
+                    const domain = email.split('@')[1];
+                    return domain &&
+                           !email.includes('..') &&
+                           !email.startsWith('.') &&
+                           !email.endsWith('.') &&
+                           email.length < 255;
+                });
+
             // Get clean text
-            return clone.textContent
-                .replace(/\s+/g, ' ')
-                .replace(/\b(Figure|Image)\s*\d*:?/gi, '')
-                .trim();
+            return {
+                text: clone.textContent
+                    .replace(/\s+/g, ' ')
+                    .replace(/\b(Figure|Image)\s*\d*:?/gi, '')
+                    .trim(),
+                emails: [...new Set(emails)] // Deduplicate emails
+            };
         });
 
         // Extract and standardize date published to ISO UTC
@@ -149,101 +233,135 @@ export const requestHandler = async ({ request, page, log, pushData, enqueueLink
                    document.querySelector('.featured-image img, .post-thumbnail img')?.src;
         });
 
+        // Extract social media profiles
+        const socialLinks = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('a[href*="twitter.com"], a[href*="instagram.com"], a[href*="linkedin.com"]'))
+                .map(el => el.href)
+                .filter(url => {
+                    const cleanUrl = url.toLowerCase();
+                    return cleanUrl.includes('twitter.com/') ||
+                           cleanUrl.includes('instagram.com/') ||
+                           cleanUrl.includes('linkedin.com/in/');
+                });
+        });
+
         // Extract comments
         const comments = await page.evaluate(() => {
             return Array.from(document.querySelectorAll('.comment-text, .comment-content')).map(el => el.textContent.trim());
         });
 
-        // Check if the article_url already exists in the batch
-        const isDuplicate = batch.some(row => row[1] === request.loadedUrl); // row[1] is article_url
-        if (isDuplicate) {
-            log.info(`Skipping duplicate URL in batch: ${request.loadedUrl}`);
-            console.log(`Skipping duplicate URL in batch: ${request.loadedUrl}`);
-        } else {
-            // Add data to the batch
-            batch.push([
-                sitehomepage, // sitehomepage (base URL of the website)
-                request.loadedUrl, // article_url (URL of the article)
-                title, // title (title of the article)
-                bodyText, // bodyText (body text of the article)
-                datePublished || null, // Convert empty/falsy values to NULL
-                articlecategories, // articlecategories (categories of the article)
-                tags, // tags (tags associated with the article)
-                keywords, // keywords (keywords associated with the article)
-                author, // author (author of the article)
-                featuredImage, // featuredImage (URL of the featured image)
-                JSON.stringify(comments), // comments (comments on the article)
-            ]);
-
-            // Insert batch if it reaches the batch size
-            if (batch.length >= BATCH_SIZE) {
-                await insertBatch(batch);
-                batch = []; // Reset the batch
-            }
-
-            // Increment the number of pages scraped
-            totalPagesScraped++;
+        // Only add data if contact info was found on this page
+        if (hasContactInfo) {
+            bodyText.emails.forEach(email => ctx.websiteData.emails.add(email));
+            socialLinks.filter(l => l.toLowerCase().includes('twitter.com')).forEach(link => ctx.websiteData.twitter_links.add(link));
+            socialLinks.filter(l => l.toLowerCase().includes('instagram.com')).forEach(link => ctx.websiteData.instagram_links.add(link));
+            socialLinks.filter(l => l.toLowerCase().includes('linkedin.com/in')).forEach(link => ctx.websiteData.linkedin_links.add(link));
         }
+
+        ctx.totalPagesScraped++;
+        log.info(`Processed page ${ctx.totalPagesScraped} for ${ctx.site_homepage}`);
 
     } catch (error) {
         log.error(`Error processing ${request.url}:`, error);
         console.error(`Error processing ${request.url}:`, error);
 
         // Increment the number of failures
-        totalFailures++;
+        ctx.totalFailures++;
+
+        // Ensure page is closed on error to prevent memory leaks
+        try {
+            if (page && !page.isClosed()) {
+                await page.close();
+            }
+        } catch (closeError) {
+            console.error('Error closing page:', closeError);
+        }
     }
 
-    // Enqueue links
-    try {
-        const links = await enqueueLinks({
-            label: 'detail',
-            transformRequestFunction(req) {
-                // Define an array of file extensions to ignore
-                const ignoredExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+    // Enqueue links - but skip if we're at or near max results to avoid race conditions
+    const shouldEnqueueLinks = !maxResults || ctx.totalPagesScraped < maxResults - 1;
 
-                // Check if the URL ends with any of the ignored extensions
-                const shouldIgnore = ignoredExtensions.some(ext => req.url.toLowerCase().endsWith(ext));
+    if (shouldEnqueueLinks) {
+        try {
+            const links = await enqueueLinks({
+                label: 'detail',
+                transformRequestFunction(req) {
+                    // Define an array of file extensions to ignore
+                    const ignoredExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
 
-                // If the URL should be ignored, return false
-                if (shouldIgnore) return false;
+                    // Check if the URL ends with any of the ignored extensions
+                    const shouldIgnore = ignoredExtensions.some(ext => req.url.toLowerCase().endsWith(ext));
 
-                // Otherwise, return the request
-                return req;
-            },
-        });
-        console.log(`Enqueued ${links.length} links from ${request.url}`);
-    } catch (error) {
-        console.error(`Error enqueueing links from ${request.url}:`, error);
+                    // If the URL should be ignored, return false
+                    if (shouldIgnore) return false;
+
+                    // Otherwise, return the request
+                    return req;
+                },
+            });
+            console.log(`Enqueued ${links.length} links from ${request.url}`);
+        } catch (error) {
+            // Don't log errors if it's related to queue being dropped (during shutdown)
+            if (!error.message?.includes('does not exist')) {
+                console.error(`Error enqueueing links from ${request.url}:`, error);
+            }
+        }
+    } else {
+        console.log(`Skipping link enqueuing - approaching max results (${ctx.totalPagesScraped}/${maxResults})`);
     }
 };
 
-// Function to flush the remaining batch (if any) when the crawl ends
-export const flushBatch = async () => {
-    if (batch.length > 0) {
-        await insertBatch(batch);
-        batch = []; // Reset the batch
+// Function to flush the website data when the crawl ends
+export const flushBatch = async (crawlId) => {
+    const ctx = crawlContexts.get(crawlId);
+    if (!ctx) return;
+
+    if (ctx.websiteData.site_homepage) {
+        // Create a row from the aggregated data
+        const row = [
+            ctx.websiteData.site_homepage,
+            ctx.websiteData.site_homepage, // We use the homepage as the loaded_url now
+            Array.from(ctx.websiteData.emails),
+            Array.from(ctx.websiteData.twitter_links),
+            Array.from(ctx.websiteData.instagram_links),
+            Array.from(ctx.websiteData.linkedin_links),
+        ];
+
+        // Use the existing insertBatch function, which expects an array of rows
+        await insertBatch([row]);
     }
+
+    // Clean up context
+    crawlContexts.delete(crawlId);
 };
 
 // Function to calculate average speed (pages per second)
-const calculateAverageSpeed = () => {
+const calculateAverageSpeed = (ctx) => {
     const endTime = Date.now();
-    const totalTimeInSeconds = (endTime - startTime) / 1000;
-    return totalPagesScraped / totalTimeInSeconds;
+    const totalTimeInSeconds = (endTime - ctx.startTime) / 1000;
+    // Avoid division by zero if no pages were scraped or time is zero
+    return totalTimeInSeconds > 0 ? ctx.totalPagesScraped / totalTimeInSeconds : 0;
 };
 
 // Function to get metrics
-export const getMetrics = () => {
+export const getMetrics = (crawlId) => {
+    const ctx = crawlContexts.get(crawlId);
+    if (!ctx) {
+        return {
+            totalPagesScraped: 0,
+            totalFailures: 0,
+            averageSpeed: 0,
+            totalArticles: 0
+        };
+    }
     return {
-        totalPagesScraped,
-        totalFailures,
-        averageSpeed: calculateAverageSpeed(),
+        totalPagesScraped: ctx.totalPagesScraped,
+        totalFailures: ctx.totalFailures,
+        averageSpeed: calculateAverageSpeed(ctx),
+        totalArticles: ctx.totalPagesScraped
     };
 };
 
-export const clearMetrics = () => {
-    totalPagesScraped = 0;
-    totalFailures = 0;
-    startTime = null;
-    sitehomepage = null; // Reset the base URL when clearing metrics
+export const clearMetrics = (crawlId) => {
+    crawlContexts.delete(crawlId);
 };
