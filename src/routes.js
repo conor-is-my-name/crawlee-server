@@ -203,12 +203,42 @@ export const requestHandler = async ({ request, page, log, pushData, enqueueLink
                 if (email.length > 254) return false;
                 if (localPart.length > 64) return false;
 
+                // Filter phone number patterns in local part
+                // Matches patterns like: 555-1234, 555.1234, (555)1234, 5551234 (all digits with separators)
+                const phonePatterns = [
+                    /^\d{3}[-.\s]?\d{3}[-.\s]?\d{4}$/,  // 555-867-5309, 555.867.5309
+                    /^\d{10}$/,                          // 5558675309
+                    /^\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$/, // (555)867-5309
+                    /^\d{3}[-.\s]?\d{4}$/,               // 555-1234
+                    /^\d{7,}$/,                          // 7+ digits in a row
+                ];
+                if (phonePatterns.some(pattern => pattern.test(localPart))) return false;
+
+                // Filter if local part is mostly digits (likely phone number)
+                const digitCount = (localPart.match(/\d/g) || []).length;
+                const letterCount = (localPart.match(/[a-z]/gi) || []).length;
+                if (digitCount > 0 && letterCount === 0 && digitCount >= 7) return false;
+
+                // Filter if local part starts with 7+ consecutive digits (phone number pattern)
+                // This catches: 5558675309manassas, 4155551234property, etc.
+                if (/^\d{7,}/.test(localPart)) return false;
+
+                // Filter if digits significantly outnumber letters (ratio > 3:1)
+                // This catches things like: 123456a, 9876543xyz
+                if (letterCount > 0 && digitCount / letterCount > 3) return false;
+
                 // Filter spam domains
                 if (commonSpamDomains.includes(domain)) return false;
 
                 // Must have valid TLD (at least 2 chars)
                 const tld = domain.split('.').pop();
                 if (!tld || tld.length < 2) return false;
+
+                // Domain must contain at least one letter (not all numbers)
+                if (!/[a-z]/i.test(domain)) return false;
+
+                // Local part should contain at least one letter (helps filter phone numbers)
+                if (!/[a-z]/i.test(localPart)) return false;
 
                 // Filter image/asset file extensions that might be false positives
                 if (email.match(/\.(jpg|jpeg|png|gif|svg|webp|css|js)$/i)) return false;
