@@ -148,25 +148,73 @@ export const requestHandler = async ({ request, page, log, pushData, enqueueLink
             elements => elements.length > 0
         );
 
-        // Extract body text
+        // Extract body text and emails
         const bodyText = await page.evaluate(() => {
             const clone = (document.querySelector('article') || document.body).cloneNode(true);
             // Remove unwanted elements
             clone.querySelectorAll('img, figure, script, style, .ad, .caption').forEach(el => el.remove());
 
-            // Extract emails from original HTML - improved regex
+            const emailSet = new Set();
+
+            // 1. Extract emails from mailto links (most reliable)
+            document.querySelectorAll('a[href^="mailto:"]').forEach(link => {
+                const email = link.href.replace('mailto:', '').split('?')[0].toLowerCase().trim();
+                if (email) emailSet.add(email);
+            });
+
+            // 2. Extract emails from text content with improved regex
             const emailRegex = /\b[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\b/gi;
-            const emails = Array.from(document.body.textContent.matchAll(emailRegex))
-                .map(m => m[0].toLowerCase())
-                .filter(email => {
-                    // Filter out common false positives
-                    const domain = email.split('@')[1];
-                    return domain &&
-                           !email.includes('..') &&
-                           !email.startsWith('.') &&
-                           !email.endsWith('.') &&
-                           email.length < 255;
-                });
+            const textEmails = Array.from(document.body.textContent.matchAll(emailRegex))
+                .map(m => m[0].toLowerCase().trim());
+            textEmails.forEach(email => emailSet.add(email));
+
+            // 3. Extract emails from HTML attributes (data-email, etc.)
+            document.querySelectorAll('[data-email], [data-mail]').forEach(el => {
+                const email = (el.getAttribute('data-email') || el.getAttribute('data-mail'))?.toLowerCase().trim();
+                if (email && email.includes('@')) emailSet.add(email);
+            });
+
+            // 4. Handle obfuscated emails in text (e.g., "name [at] domain [dot] com")
+            const obfuscatedRegex = /\b([A-Za-z0-9._%+-]+)\s*[\[\(]?\s*at\s*[\]\)]?\s*([A-Za-z0-9-]+)\s*[\[\(]?\s*dot\s*[\]\)]?\s*([A-Za-z]+)\b/gi;
+            const obfuscatedMatches = Array.from(document.body.textContent.matchAll(obfuscatedRegex));
+            obfuscatedMatches.forEach(match => {
+                const email = `${match[1]}@${match[2]}.${match[3]}`.toLowerCase().trim();
+                emailSet.add(email);
+            });
+
+            // Filter out invalid and spam emails
+            const commonSpamDomains = [
+                'example.com', 'example.org', 'test.com', 'test.org',
+                'domain.com', 'email.com', 'yoursite.com', 'yourdomain.com',
+                'sentry.io', 'wixpress.com', 'schema.org'
+            ];
+
+            const validEmails = Array.from(emailSet).filter(email => {
+                // Basic validation
+                const parts = email.split('@');
+                if (parts.length !== 2) return false;
+
+                const [localPart, domain] = parts;
+
+                // Filter invalid patterns
+                if (!localPart || !domain) return false;
+                if (email.includes('..')) return false;
+                if (email.startsWith('.') || email.endsWith('.')) return false;
+                if (email.length > 254) return false;
+                if (localPart.length > 64) return false;
+
+                // Filter spam domains
+                if (commonSpamDomains.includes(domain)) return false;
+
+                // Must have valid TLD (at least 2 chars)
+                const tld = domain.split('.').pop();
+                if (!tld || tld.length < 2) return false;
+
+                // Filter image/asset file extensions that might be false positives
+                if (email.match(/\.(jpg|jpeg|png|gif|svg|webp|css|js)$/i)) return false;
+
+                return true;
+            });
 
             // Get clean text
             return {
@@ -174,7 +222,7 @@ export const requestHandler = async ({ request, page, log, pushData, enqueueLink
                     .replace(/\s+/g, ' ')
                     .replace(/\b(Figure|Image)\s*\d*:?/gi, '')
                     .trim(),
-                emails: [...new Set(emails)] // Deduplicate emails
+                emails: validEmails
             };
         });
 
@@ -235,14 +283,39 @@ export const requestHandler = async ({ request, page, log, pushData, enqueueLink
 
         // Extract social media profiles
         const socialLinks = await page.evaluate(() => {
-            return Array.from(document.querySelectorAll('a[href*="twitter.com"], a[href*="instagram.com"], a[href*="linkedin.com"]'))
-                .map(el => el.href)
-                .filter(url => {
-                    const cleanUrl = url.toLowerCase();
-                    return cleanUrl.includes('twitter.com/') ||
-                           cleanUrl.includes('instagram.com/') ||
-                           cleanUrl.includes('linkedin.com/in/');
-                });
+            const socialSet = new Set();
+
+            // Twitter/X patterns
+            const twitterSelectors = 'a[href*="twitter.com"], a[href*="x.com"]';
+            document.querySelectorAll(twitterSelectors).forEach(el => {
+                const url = el.href.toLowerCase();
+                // Filter out generic links like /share, /intent, etc.
+                if (url.match(/(?:twitter\.com|x\.com)\/(?!share|intent|i\/|home|explore|search)[a-zA-Z0-9_]+/)) {
+                    socialSet.add(el.href);
+                }
+            });
+
+            // Instagram patterns
+            const instaSelectors = 'a[href*="instagram.com"]';
+            document.querySelectorAll(instaSelectors).forEach(el => {
+                const url = el.href.toLowerCase();
+                // Filter out generic/action links
+                if (url.match(/instagram\.com\/(?!p\/|reel\/|tv\/|explore)[a-zA-Z0-9._]+/)) {
+                    socialSet.add(el.href);
+                }
+            });
+
+            // LinkedIn patterns (company pages and personal profiles)
+            const linkedinSelectors = 'a[href*="linkedin.com"]';
+            document.querySelectorAll(linkedinSelectors).forEach(el => {
+                const url = el.href.toLowerCase();
+                // Match both /in/ (profiles) and /company/ (company pages)
+                if (url.match(/linkedin\.com\/(in|company)\//)) {
+                    socialSet.add(el.href);
+                }
+            });
+
+            return Array.from(socialSet);
         });
 
         // Extract comments
@@ -253,9 +326,20 @@ export const requestHandler = async ({ request, page, log, pushData, enqueueLink
         // Only add data if contact info was found on this page
         if (hasContactInfo) {
             bodyText.emails.forEach(email => ctx.websiteData.emails.add(email));
-            socialLinks.filter(l => l.toLowerCase().includes('twitter.com')).forEach(link => ctx.websiteData.twitter_links.add(link));
-            socialLinks.filter(l => l.toLowerCase().includes('instagram.com')).forEach(link => ctx.websiteData.instagram_links.add(link));
-            socialLinks.filter(l => l.toLowerCase().includes('linkedin.com/in')).forEach(link => ctx.websiteData.linkedin_links.add(link));
+
+            // Add Twitter/X links
+            socialLinks.filter(l => {
+                const url = l.toLowerCase();
+                return url.includes('twitter.com') || url.includes('x.com');
+            }).forEach(link => ctx.websiteData.twitter_links.add(link));
+
+            // Add Instagram links
+            socialLinks.filter(l => l.toLowerCase().includes('instagram.com'))
+                .forEach(link => ctx.websiteData.instagram_links.add(link));
+
+            // Add LinkedIn links (both profiles and company pages)
+            socialLinks.filter(l => l.toLowerCase().includes('linkedin.com'))
+                .forEach(link => ctx.websiteData.linkedin_links.add(link));
         }
 
         ctx.totalPagesScraped++;
