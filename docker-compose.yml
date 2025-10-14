@@ -1,14 +1,24 @@
 services:
   scraper1:
     tmpfs:
-     - /tmp:size=1G,mode=1777
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
     build: .
     env_file: .env
     environment:
-      PORT: 3001
+      PORT: 11000
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
     ports:
-      - "3001:3001"
-    cpu_shares: 1024
+      - "11000:11000"
+    cpu_shares: 512
+    cpuset: "0"
+    read_only: true
+    security_opt:
+      - no-new-privileges
     deploy:
       replicas: 1
       resources:
@@ -20,14 +30,24 @@ services:
 
   scraper2:
     tmpfs:
-     - /tmp:size=1G,mode=1777
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
     build: .
     env_file: .env
     environment:
-      PORT: 3002
+      PORT: 11001
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
     ports:
-      - "3002:3002"
-    cpu_shares: 1024
+      - "11001:11001"
+    cpu_shares: 512
+    cpuset: "1"
+    read_only: true
+    security_opt:
+      - no-new-privileges
     deploy:
       replicas: 1
       resources:
@@ -39,14 +59,24 @@ services:
 
   scraper3:
     tmpfs:
-     - /tmp:size=1G,mode=1777
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
     build: .
     env_file: .env
     environment:
-      PORT: 3003
+      PORT: 11002
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
     ports:
-      - "3003:3003"
-    cpu_shares: 1024
+      - "11002:11002"
+    cpu_shares: 512
+    cpuset: "2"
+    read_only: true
+    security_opt:
+      - no-new-privileges
     deploy:
       replicas: 1
       resources:
@@ -58,14 +88,256 @@ services:
 
   scraper4:
     tmpfs:
-     - /tmp:size=1G,mode=1777
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
     build: .
     env_file: .env
     environment:
-      PORT: 3004
+      PORT: 11003
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
     ports:
-      - "3004:3004"
-    cpu_shares: 1024
+      - "11003:11003"
+    cpu_shares: 512
+    cpuset: "3"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper5:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11004
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11004:11004"
+    cpu_shares: 512
+    cpuset: "4"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper6:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11005
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11005:11005"
+    cpu_shares: 512
+    cpuset: "5"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper7:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11006
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11006:11006"
+    cpu_shares: 512
+    cpuset: "6"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper8:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11007
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11007:11007"
+    cpu_shares: 512
+    cpuset: "7"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper9:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11008
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11008:11008"
+    cpu_shares: 512
+    cpuset: "8"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper10:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11009
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11009:11009"
+    cpu_shares: 512
+    cpuset: "9"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper11:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11010
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11010:11010"
+    cpu_shares: 512
+    cpuset: "10"
+    read_only: true
+    security_opt:
+      - no-new-privileges
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+    networks:
+      - shark
+
+  scraper12:
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /usr/src/app/storage:size=500M,mode=1777
+      - /var/cache:size=100M,mode=1777
+      - /root/.cache:size=500M,mode=1777
+      - /home/pptruser/.cache:size=500M,mode=1777
+    build: .
+    env_file: .env
+    environment:
+      PORT: 11011
+      CRAWLEE_STORAGE_DIR: /usr/src/app/storage
+      TMPDIR: /tmp
+    ports:
+      - "11011:11011"
+    cpu_shares: 512
+    cpuset: "11"
+    read_only: true
+    security_opt:
+      - no-new-privileges
     deploy:
       replicas: 1
       resources:

@@ -90,8 +90,19 @@ app.get('/start-crawl', async (req, res) => {
                         '--disk-cache-size=0',
                         '--disable-dev-shm-usage',
                         '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-gpu',
+                        '--disable-web-security',
+                        '--disable-features=IsolateOrigins,site-per-process',
+                        '--no-first-run',
+                        '--no-zygote',
+                        '--single-process',
+                        '--disable-extensions'
                     ],
                 },
+            },
+            browserPoolOptions: {
+                retireBrowserAfterPageCount: 10, // Close browser after 10 pages to prevent memory leaks
             },
             maxConcurrency: parseInt(process.env.maxConcurrency) || 3,
             maxRequestRetries: 0,
@@ -193,6 +204,17 @@ app.get('/start-crawl', async (req, res) => {
         // Clean up crawler resources first - this will wait for pending operations
         try {
             if (crawler) {
+                // Close all browser pages and contexts first
+                if (crawler.browserPool) {
+                    try {
+                        // Close all browser instances in the pool
+                        await crawler.browserPool.destroy();
+                        console.log('Browser pool destroyed');
+                    } catch (poolError) {
+                        console.error('Error destroying browser pool:', poolError);
+                    }
+                }
+
                 // Wait for crawler to fully teardown including all pending request updates
                 await crawler.teardown();
                 console.log('Crawler resources cleaned up');
@@ -202,6 +224,12 @@ app.get('/start-crawl', async (req, res) => {
             if (cleanupError.message && !cleanupError.message.includes('Cannot read properties of undefined')) {
                 console.error('Error during crawler cleanup:', cleanupError);
             }
+        }
+
+        // Force garbage collection if available (V8 only)
+        if (global.gc) {
+            global.gc();
+            console.log('Forced garbage collection');
         }
 
         // Don't manually drop the queue - let the memory storage handle cleanup
